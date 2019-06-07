@@ -24,21 +24,31 @@
     <header>
         <div class="navbar navbar-dark bg-dark box-shadow">
             <div class="container d-flex justify-content-between">
-                <a href="/make" class="navbar-brand d-flex align-items-center">
-                    <strong>新しくスレッドを作る</strong>
+                <a href="/" class="navbar-brand d-flex align-items-center">
+                    <strong>BBS テスト</strong>
                 </a>
             </div>
         </div>
     </header>
+    <div class="content container">
+    
+        <form action="/delete_thread" method="post">
+            <h2>スレッド</h2>
+            {% for v in value_list %}
+            <li>
+                    <input type="checkbox" name="select" value={{v[0]}}> {{ v[1] }}</a>
 
-    <form action="/make" method="post">
-        <p>タイトル<input type="text" name="title"></p>
-        <p>本文<input type = "text" name = "message"></p>
-        <p><input type="submit" value="送信する"></p>
-        
-    </form>       
-     
-     <a href="/">戻る</a>
+             </li>
+            {% endfor %}
+
+
+
+        選択したスレッドを削除する
+            <input type=submit value="delete">
+        </form>
+    </div>
+
+ 
  
 </body>
 </html>
