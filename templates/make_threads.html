@@ -34,9 +34,12 @@
     <form action="/make" method="post">
         <p>タイトル<input type="text" name="title"></p>
         <p>本文<input type = "text" name = "message"></p>
+        <p>パスワード<input type="password" name=pwd> </p>
         <p><input type="submit" value="送信する"></p>
         
     </form>       
+     
+     {{ msg }}
      
      <a href="/">戻る</a>
  

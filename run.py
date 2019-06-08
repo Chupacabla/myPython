@@ -29,6 +29,11 @@ class BBS_Thread_Body(Base):
     msg = Column(String(255), default=" ")
     time_stamp = Column(String(255), default=" ")
 
+    # 書き込みの状態　0..なし 1...あり  2...削除済み
+    stat = Column(Integer, default=0)
+
+    pwd = Column(String(255), default="")
+
     def __repr__(selef):
         return "<BBS Thread body(no='%s', msg='%s',time='%s')>" % (self.no, self.msg, self.time_stamp)
 
@@ -93,7 +98,7 @@ def get_thread_data(num):
         session = Session()
         res = session.query(BBS_Thread_Body).all()
         for v in res:
-            value_list.append([v.no, v.msg, v.time_stamp])
+            value_list.append([v.no, v.msg, v.time_stamp, v.stat])
 
     return value_list
 
@@ -114,16 +119,20 @@ def get_thread_info(num):
         config.read(ini_name)
         title = config.get("THREAD", "title")
         no = config.get("THREAD", "no")
+        pwd = config.get("THREAD", "pwd")
         isExist = True
 
-    return {"isExist": isExist, "title": title,  "db": db_name, "db_connect": db_connect,  "ini": ini_name}
+    return {"isExist": isExist, "title": title,  "db": db_name, "db_connect": db_connect,  "ini": ini_name, "pwd": pwd}
 
 
-@app.route('/view/<name>', methods=['POST', 'GET'])
+@app.route('/view/<name>', methods=['POST'])
 def thread_view_02(name=None):
 
     thread_no = int(name)
     info = get_thread_info(thread_no)
+
+    if info["isExist"] == False:
+        return render_template('not_found.html')
 
     # レス入力がある場合
     if request.method == "POST":
@@ -135,8 +144,10 @@ def thread_view_02(name=None):
             session = Session()
 
             res = request.form["res"]
+            pwd = request.form["pwd"]
             t_stamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-            session.add(BBS_Thread_Body(msg=res, time_stamp=t_stamp))
+            session.add(BBS_Thread_Body(
+                msg=res, time_stamp=t_stamp, stat=1, pwd=pwd))
             session.commit()
 
     value_list = get_thread_data(thread_no)
@@ -150,7 +161,7 @@ def thread_view(name=None):
     value_list = get_thread_data(thread_no)
     info = get_thread_info(thread_no)
 
-    if len(value_list) == 0:
+    if len(value_list) == 0 or info["isExist"] == False:
         return render_template('not_found.html')
 
     return render_template('view.html', value_list=value_list, title=info["title"], thread_no=thread_no)
@@ -163,19 +174,63 @@ def delete_thread():
     value_list = get_bbs_header()
     return render_template("delete_thread.html", value_list=value_list)
 
+
 # スレ削除
 @app.route('/delete_thread',  methods=['POST'])
 def delete_thread_02():
 
     if request.method == "POST":
         checks = request.form.getlist("select")
-        # スレッド削除
-        for num in checks:
-            delete_thread_data(str(num))
-        pass
+
+        if len(checks) == 0:
+            pass
+        else:
+            num = checks[0]
+            pwd = request.form["pwd"]
+            info = get_thread_info(num)
+
+            msg = ""
+            if pwd == info["pwd"]:
+                delete_thread_data(str(num))
+                msg = "スレッドを削除しました"
+            else:
+                msg = "パスワードが違います"
+
+            value_list = get_bbs_header()
+            return render_template("delete_thread.html", value_list=value_list, msg=msg)
 
     value_list = get_bbs_header()
     return render_template("index.html", value_list=value_list)
+
+# レスの削除
+@app.route("/tools/<name>", methods=["POST"])
+def delete_message(name):
+
+    thread_no = int(name)
+    info = get_thread_info(thread_no)
+
+    if info["isExist"] == False:
+        return render_template('not_found.html')
+
+    if request.method == "POST":
+        checks = request.form.getlist("select")
+        pwd = request.form["pwd"]
+        engine = create_engine(info["db_connect"])
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        for no in checks:
+            res = session.query(BBS_Thread_Body).filter(
+                BBS_Thread_Body.no == no).first()
+
+            if res.pwd == pwd:
+                res.stat = 2
+        # データを確定
+        session.commit()
+
+    value_list = get_thread_data(thread_no)
+    return render_template('view.html', value_list=value_list, title=info["title"], thread_no=thread_no)
 
 
 @app.route("/make", methods=['POST', 'GET'])
@@ -189,6 +244,20 @@ def make_new_data():
         title = request.form["title"]
         message = request.form["message"]
         t_stamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+        pwd = request.form["pwd"]
+
+        # 各種入力チェック
+        if len(str(title)) == 0:
+            msg = "エラー！タイトルを入力してください"
+            return render_template("make_threads.html", msg=msg)
+
+        if len(str(message)) == 0:
+            msg = "エラー！本文を入力してください"
+            return render_template("make_threads.html", msg=msg)
+
+        if len(str(pwd)) == 0:
+            msg = "エラー！パスワードを入力してください"
+            return render_template("make_threads.html", msg=msg)
 
         # スレ番号取得
         config = configparser.ConfigParser()
@@ -205,6 +274,7 @@ def make_new_data():
         config2.set("THREAD", "no", str(thread_no))
         config2.set("THREAD", "title", title)
         config2.set("THREAD", "db", base_name + ".db")
+        config2.set("THREAD", "pwd", pwd)
         with open(ini_name, 'w') as file:
             config2.write(file)
 
@@ -213,7 +283,8 @@ def make_new_data():
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
         session = Session()
-        session.add(BBS_Thread_Body(msg=message, time_stamp=t_stamp))
+        session.add(BBS_Thread_Body(
+            msg=message, time_stamp=t_stamp, stat=1, pwd=pwd))
         session.flush()
         session.commit()
 
