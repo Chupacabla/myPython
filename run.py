@@ -2,6 +2,8 @@
 from flask import Flask
 from flask import render_template
 from flask import request       # POST GET するなら必要
+from flask import redirect
+from flask import url_for
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
@@ -124,7 +126,7 @@ def get_thread_info(num):
 
     return {"isExist": isExist, "title": title,  "db": db_name, "db_connect": db_connect,  "ini": ini_name, "pwd": pwd}
 
-
+# スレ表示
 @app.route('/view/<name>', methods=['POST'])
 def thread_view_02(name=None):
 
@@ -150,8 +152,8 @@ def thread_view_02(name=None):
                 msg=res, time_stamp=t_stamp, stat=1, pwd=pwd))
             session.commit()
 
-    value_list = get_thread_data(thread_no)
-    return render_template('view.html', value_list=value_list, title=info["title"], thread_no=thread_no)
+    return redirect(url_for("thread_view", name=name))
+
 
 # スレ表示
 @app.route('/view/<name>')
@@ -199,8 +201,8 @@ def delete_thread_02():
             value_list = get_bbs_header()
             return render_template("delete_thread.html", value_list=value_list, msg=msg)
 
-    value_list = get_bbs_header()
-    return render_template("index.html", value_list=value_list)
+    return redirect("/")
+
 
 # レスの削除
 @app.route("/tools/<name>", methods=["POST"])
@@ -229,8 +231,7 @@ def delete_message(name):
         # データを確定
         session.commit()
 
-    value_list = get_thread_data(thread_no)
-    return render_template('view.html', value_list=value_list, title=info["title"], thread_no=thread_no)
+    return redirect(url_for("thread_view", name=name))
 
 
 @app.route("/make", methods=['POST', 'GET'])
@@ -293,6 +294,8 @@ def make_new_data():
         config.set("BBS", "MakingCounter", str(thread_no))
         with open(INI_PATH, 'w') as file:
             config.write(file)
+
+        return redirect("/")
 
     return render_template("make_threads.html")
 
